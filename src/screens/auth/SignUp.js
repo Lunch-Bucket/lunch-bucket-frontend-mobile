@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {Image, Keyboard, SafeAreaView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {Image, Keyboard, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import STRINGS from '../../helpers/strings/strings';
 import PATHS from '../../helpers/paths/paths';
 import {Formik} from 'formik';
@@ -11,6 +11,9 @@ import {useToast} from '../../helpers/toast/Toast';
 import {log} from '../../helpers/logs/log';
 import {StatusBar} from 'expo-status-bar';
 import * as Network from "expo-network";
+import * as Device from "expo-device";
+import * as Notifications from "expo-notifications";
+import {addDataToLocalStorage} from "../../helpers/storage/asyncStorage";
 
 const validationSchema = Yup.object().shape({
     email: Yup.string().email('Invalid email address').required('Email is required'),
@@ -50,6 +53,63 @@ export default function SignUp({navigation}) {
     const [, setToastMessage] = useState(null);
     const {showToast} = useToast();
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+    const [expoPushToken, setExpoPushToken] = useState('');
+
+    async function registerForPushNotificationsAsync() {
+        let token;
+        if (Device.isDevice) {
+            const {status: existingStatus} = await Notifications.getPermissionsAsync();
+            let finalStatus = existingStatus;
+            if (existingStatus !== 'granted') {
+                const {status} = await Notifications.requestPermissionsAsync();
+                finalStatus = status;
+            }
+            if (finalStatus !== 'granted') {
+                alert('Failed to get push token for push notification!');
+                return;
+            }
+            token = (await Notifications.getExpoPushTokenAsync({projectId: '28d5e5c1-53f3-4c9c-abcb-2bdbc0639464'})).data;
+            console.warn("Push Token", token);
+        } else {
+            alert('Must use physical device for Push Notifications');
+        }
+
+        if (Platform.OS === 'android') {
+            await Notifications.setNotificationChannelAsync('default', {
+                name: 'default',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#FF231F7C',
+            });
+        }
+        return token;
+    }
+
+    const storeToken = async () => {
+        try {
+            const response = await registerForPushNotificationsAsync();
+            console.log("response", response);
+
+            if (response) {
+                console.log("response", response);
+                await addDataToLocalStorage('expoPushToken', response.toString());
+                setExpoPushToken(response.toString());
+            } else {
+                await addDataToLocalStorage('expoPushToken', "");
+                setExpoPushToken("");
+            }
+
+        } catch (error) {
+            log("error", "PushNotifications", "storeToken", error.message, "PushNotifications.js");
+        }
+    };
+
+    useEffect(() => {
+        storeToken().catch((error) => {
+            log("error", "PushNotifications", "useEffect | storeToken", error.message, "PushNotifications.js");
+        });
+
+    }, []);
 
     useEffect(() => {
         const keyboardDidShowListener = Keyboard.addListener(
@@ -90,7 +150,7 @@ export default function SignUp({navigation}) {
         setIsLoading(true);
 
         try {
-            const result = await registerService(values.email, values.password, values.contactNo);
+            const result = await registerService(values.email, values.password, values.contactNo, expoPushToken);
             if (result === 'success') {
                 showToast('success', 'Successfully Registered.');
                 actions.resetForm();

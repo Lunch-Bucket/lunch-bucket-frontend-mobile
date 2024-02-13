@@ -43,13 +43,13 @@ export async function loginService(email, password) {
     }
 }
 
-export async function registerService(email, password, contactNo) {
+export async function registerService(email, password, contactNo, expoPushToken) {
     try {
         if (email === "" || password === "" || contactNo === "") {
             return ERROR_STATUS.ERROR;
         }
 
-        const result = await registerController(email, password, contactNo);
+        const result = await registerController(email, password, contactNo, expoPushToken);
         const data = await result.data;
 
         if (result === "error") {

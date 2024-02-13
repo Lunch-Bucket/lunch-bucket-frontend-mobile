@@ -33,10 +33,8 @@ export async function loginController(email, password) {
     }
 }
 
-export async function registerController(email, password, contactNo) {
+export async function registerController(email, password, contactNo, expoPushToken) {
     try {
-        const expoPushToken = await getDataFromLocalStorage('expoPushToken');
-
         const response = await lunchBucketAPI.post(
             'addCustomer',
             {
